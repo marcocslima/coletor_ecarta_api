@@ -1,0 +1,1 @@
+# coletor_ecarta_api
