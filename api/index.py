@@ -2,6 +2,7 @@ import os
 import io
 import ftplib
 import json
+import tempfile
 from base64 import b64decode
 
 from fastapi import FastAPI, HTTPException
@@ -32,26 +33,48 @@ settings = Settings()
 app = FastAPI(
     title="API de Sincronização FTP -> Google Drive",
     description="Baixa arquivos de um diretório FTP, salva no Google Drive e os remove do FTP. Inclui endpoint de manutenção para limpar a pasta do Drive.",
-    version="1.2.0"
+    version="1.3.0"
 )
 
 # 3. Lógica de autenticação com Google Drive
 def get_drive_service():
     """Cria e retorna o serviço do Google Drive autenticado."""
     SCOPES = ['https://www.googleapis.com/auth/drive']
+    
     try:
+        # Se estiver rodando na Vercel (variável de ambiente existe)
         if settings.google_credentials_base64:
+            # Decodifica a string Base64 para bytes
             decoded_creds = b64decode(settings.google_credentials_base64)
-            creds_json = json.loads(decoded_creds)
-            creds = service_account.Credentials.from_service_account_info(creds_json, scopes=SCOPES)
+            
+            # Cria um arquivo temporário seguro para armazenar as credenciais
+            with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as temp_creds_file:
+                # Escreve o conteúdo decodificado (convertido para string) no arquivo
+                temp_creds_file.write(decoded_creds.decode('utf-8'))
+                temp_creds_file_path = temp_creds_file.name # Pega o caminho do arquivo temporário
+
+            # Agora, a biblioteca do Google lê do arquivo que acabamos de criar
+            creds = service_account.Credentials.from_service_account_file(
+                temp_creds_file_path, scopes=SCOPES
+            )
+            
+            # Remove o arquivo temporário após o uso para não deixar lixo
+            os.remove(temp_creds_file_path)
+
+        # Se estiver rodando localmente (usa o arquivo service_account.json)
         else:
             creds = service_account.Credentials.from_service_account_file(
                 "service_account.json", scopes=SCOPES
             )
+        
         service = build("drive", "v3", credentials=creds)
         return service
+
     except Exception as e:
         print(f"Erro ao autenticar com o Google: {e}")
+        # Adicionamos mais detalhes ao erro para depuração
+        if 'settings' in locals() and settings.google_credentials_base64:
+             print(f"Tamanho da credencial Base64 recebida: {len(settings.google_credentials_base64)}")
         raise HTTPException(status_code=500, detail=f"Falha na autenticação com o Google Drive: {e}")
 
 # 4. O endpoint principal da API de Sincronização
@@ -82,7 +105,6 @@ async def sync_ftp_to_drive():
         drive_service = get_drive_service()
 
         for filename in filenames:
-            # Lógica principal de transferência... (sem alterações aqui)
             try:
                 mem_file = io.BytesIO()
                 ftp.retrbinary(f'RETR {filename}', mem_file.write)
@@ -121,7 +143,7 @@ async def sync_ftp_to_drive():
         "deleted_from_ftp": deleted_from_ftp
     }
 
-# NOVO ENDPOINT DE MANUTENÇÃO
+# Endpoint de Manutenção
 @app.post("/api/delete-drive-files", tags=["Manutenção"])
 async def delete_drive_files():
     """
