@@ -69,7 +69,6 @@ async def sync_ftp_to_drive():
     """
     # ... (O código desta função permanece o mesmo)
     transferred_files = []
-    deleted_from_ftp = []
     
     try:
         ftp = ftplib.FTP()
@@ -92,9 +91,7 @@ async def sync_ftp_to_drive():
                 media = MediaIoBaseUpload(mem_file, mimetype='application/octet-stream', resumable=True)
                 file = drive_service.files().create(body=file_metadata, media_body=media, fields='id, name').execute()
                 transferred_files.append(file.get('name'))
-                ftp.delete(filename)
-                deleted_from_ftp.append(filename)
-                print(f"Arquivo '{filename}' processado e deletado do FTP.")
+                print(f"Arquivo '{filename}' processado do FTP.")
             except Exception as loop_error:
                 print(f"ERRO ao processar o arquivo '{filename}': {loop_error}. Pulando para o próximo.")
                 continue
@@ -103,7 +100,7 @@ async def sync_ftp_to_drive():
         raise HTTPException(status_code=500, detail=f"Erro no FTP: {e}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ocorreu um erro inesperado: {e}")
-    return {"message": "Sincronização concluída!", "transferred_files": transferred_files, "deleted_from_ftp": deleted_from_ftp}
+    return {"message": "Sincronização concluída!", "transferred_files": transferred_files}
 
 # Endpoint de Manutenção para o Drive
 @app.post("/api/delete-drive-files", tags=["Manutenção"])
@@ -138,7 +135,7 @@ async def delete_drive_files():
     return {"message": "Limpeza da pasta do Drive concluída.", "folder_id": folder_id, "deleted_count": len(deleted_files), "deleted_files": deleted_files}
 
 # ====================================================================
-# NOVO ENDPOINT DE MANUTENÇÃO PARA O FTP
+# ENDPOINT DE MANUTENÇÃO PARA O FTP
 # ====================================================================
 @app.post("/api/cleanup-ftp", tags=["Manutenção"])
 async def cleanup_ftp_directory():
