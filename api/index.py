@@ -180,6 +180,30 @@ async def cleanup_ftp_directory():
         "deleted_files": deleted_files
     }
 
+@app.get("/files", tags=["Arquivos"])
+async def list_files():
+    """
+    Lista os arquivos no diretório FTP especificado.
+    """
+    try:
+        ftp = ftplib.FTP()
+        ftp.connect(settings.host, settings.port)
+        ftp.login(settings.user_ecarta, settings.password_ecarta)
+        ftp.cwd(settings.directory_ecarta)
+        
+        filenames = ftp.nlst()
+        ftp.quit()
+        
+        if not filenames:
+            return {"message": "Nenhum arquivo encontrado no diretório FTP."}
+        
+        return {"files": filenames}
+    
+    except ftplib.all_errors as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao listar arquivos no FTP: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ocorreu um erro inesperado: {e}")
+
 # Endpoint raiz para teste
 @app.get("/api", tags=["Status"])
 def root():
