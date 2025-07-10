@@ -89,7 +89,7 @@ async def sync_ftp_to_drive():
                 mem_file.seek(0)
                 file_metadata = {'name': filename, 'parents': [settings.google_folder_id]}
                 media = MediaIoBaseUpload(mem_file, mimetype='application/octet-stream', resumable=True)
-                file = drive_service.files().create(body=file_metadata, media_body=media, fields='id, name').execute()
+                file = drive_service.files().create(body=file_metadata, media_body=media, fields='id, name', supportsAllDrives=True).execute()
                 transferred_files.append(file.get('name'))
                 print(f"Arquivo '{filename}' processado do FTP.")
             except Exception as loop_error:
@@ -115,13 +115,17 @@ async def delete_drive_files():
     try:
         page_token = None
         while True:
-            response = drive_service.files().list(q=f"'{folder_id}' in parents and trashed=false", fields="nextPageToken, files(id, name)", pageToken=page_token).execute()
+            response = drive_service.files().list(q=f"'{folder_id}' in parents and trashed=false", 
+            fields="nextPageToken, files(id, name)", 
+            pageToken=page_token,
+            includeItemsFromAllDrives=True,
+            supportsAllDrives=True).execute()
             files_in_page = response.get('files', [])
             if not files_in_page: break
             for file in files_in_page:
                 file_id, file_name = file.get('id'), file.get('name')
                 try:
-                    drive_service.files().delete(fileId=file_id).execute()
+                    drive_service.files().delete(fileId=file_id, supportsAllDrives=True).execute()
                     deleted_files.append(file_name)
                     print(f"Arquivo '{file_name}' deletado do Google Drive.")
                 except HttpError as error:
